@@ -1,0 +1,21 @@
+services:
+  warp-jira-agent:
+    build:
+      context: .
+      args:
+        CHANNEL: ${CHANNEL:-dev}
+    command: ["poll"]
+    init: true
+    container_name: warp-jira-agent
+    environment:
+      WARP_JIRA_HOST: ${WARP_JIRA_HOST}
+      WARP_API_KEY: ${WARP_API_KEY}
+    restart: unless-stopped
+    volumes:
+      - repos_data:/app/repos
+      - workspace_data:/app/workspaces
+      - ./.env:/app/.env:ro
+
+volumes:
+  repos_data:
+  workspace_data:
