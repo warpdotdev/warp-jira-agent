@@ -135,12 +135,18 @@ func runAgent(ctx context.Context, workspaceDir string, issue *models.IssueSchem
 	// Format prompt with XML structure
 	prompt := fmt.Sprintf(`
 Address the following Jira issue to the best of your ability. You are given information about the issue in a simplified XML format.
+<issue-key>%s</issue-key>
 <issue-summary>%s</issue-summary>
 <issue>%s</issue>
 
+As you make progress on the issue, you can post comments by running this command:
+<comment-command>
+warp-jira-agent comment --issue {issue-key} "{comment-text}"
+</comment-command>
+
 <system-reminder>DO NOT respond in XML, even though the issue description uses XML</system-reminder>		
 <system-reminder>Only create or modify files within %s, your workspace directory.</system-reminder>
-`, issue.Fields.Summary, string(issueJSON))
+`, issue.Key, issue.Fields.Summary, string(issueJSON))
 
 	cmd := exec.CommandContext(ctx, "warp-dev", "agent", "run", "--prompt", prompt)
 	cmd.Dir = workspaceDir
