@@ -148,7 +148,7 @@ warp-jira-agent comment --issue {issue-key} "{comment-text}"
 <system-reminder>Only create or modify files within %s, your workspace directory.</system-reminder>
 `, issue.Key, issue.Fields.Summary, string(issueJSON))
 
-	cmd := exec.CommandContext(ctx, "warp-cli-dev", "agent", "run", "--prompt", prompt)
+	cmd := exec.CommandContext(ctx, "warp-cli-dev", "agent", "run", "--prompt", prompt, "--debug")
 	cmd.Dir = workspaceDir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
