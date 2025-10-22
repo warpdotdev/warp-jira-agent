@@ -29,9 +29,14 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
     fi \
     && dpkg -i warp-cli.deb || (apt-get update && apt-get install -f -y) \
     && dpkg -i warp-cli.deb \
+    && wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+    && chmod +x /usr/local/bin/yq \
     && rm -rf /var/lib/apt/lists /var/cache/apt/archives warp-cli.deb
 
 WORKDIR /app
+
+COPY entrypoint.sh /usr/bin/entrypoint.sh
+
 COPY --from=build-stage /usr/local/bin/warp-jira-agent /usr/bin/warp-jira-agent
 
-ENTRYPOINT ["/usr/bin/warp-jira-agent"]
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]

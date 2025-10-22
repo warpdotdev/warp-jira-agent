@@ -13,6 +13,7 @@ services:
     volumes:
       - repos_data:/app/repos
       - workspace_data:/app/workspaces
+      - ./repos.yaml:/app/repos.yaml:ro
 
 volumes:
   repos_data:

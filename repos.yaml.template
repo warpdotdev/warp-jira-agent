@@ -1,0 +1,10 @@
+repositories: 
+  - url: "your-org/your-repo-name"
+    branch: "main"
+     
+  - url: "your-org/another-repo"
+    branch: "develop"
+  
+  # Add more repositories as needed
+  # - url: "organization/repository"
+  #   branch: "branch-name"
