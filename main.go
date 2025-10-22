@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
-	atlassian "github.com/ctreminiom/go-atlassian/jira/v3"
-	"github.com/ctreminiom/go-atlassian/pkg/infra/models"
+	atlassian "github.com/ctreminiom/go-atlassian/v2/jira/v3"
+	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -88,7 +89,7 @@ func handleIssue(issue *models.IssueScheme) error {
 	err := os.Mkdir(workspaceDir, 0755)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			log.Info().
+			log.Debug().
 				Str("key", issue.Key).
 				Msg("issue was already handled")
 			return nil
@@ -103,53 +104,92 @@ func handleIssue(issue *models.IssueScheme) error {
 
 	log.Info().
 		Str("key", issue.Key).
-		Str("summary", issue.Fields.Summary).
-		Str("status", issue.Fields.Status.Name).
-		Str("directory", workspaceDir).
 		Msg("processing issue")
+
+	// Run agent in a new goroutine
+	go runAgent(context.Background(), workspaceDir, issue)
+
 	return nil
+}
+
+// runAgent runs a Warp agent on the given issue.
+func runAgent(ctx context.Context, workspaceDir string, issue *models.IssueScheme) {
+	outputLogPath := filepath.Join(workspaceDir, "output.log")
+	logger := log.With().
+		Str("key", issue.Key).
+		Str("logPath", outputLogPath).
+		Logger()
+
+	logFile, err := os.Create(outputLogPath)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("failed to create output log file")
+		return
+	}
+	defer logFile.Close()
+
+	cmd := exec.CommandContext(ctx, "warp", "agent", "run", "--prompt", issue.Fields.Summary)
+	cmd.Dir = workspaceDir
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	logger.Info().Msg("starting warp agent")
+	if err := cmd.Run(); err != nil {
+		logger.Error().
+			Err(err).
+			Msg("warp agent command failed")
+		return
+	}
+
+	logger.Info().Msg("warp agent completed")
 }
 
 // Search for issues with the label `label`, and run `callback` on each one.
 func searchIssues(ctx context.Context, client *atlassian.Client, label string, callback func(*models.IssueScheme) error) error {
+	log.Info().Str("label", label).Msg("Searching for Jira issues")
+	
 	jql := "labels = " + label + " ORDER BY created DESC"
 
 	const pageSize = 50
-	startAt := 0
-	totalIssues := 0
+	
+	// Fields to return for each issue.
+	fields := []string{"summary", "status", "id", "description"}
+	
+	// Expansions to apply on each issue.
+	expands := []string{}
 
+	var nextPageToken string
 	for {
-		options := &models.SearchOptionsScheme{
-			MaxResults: pageSize,
-			StartAt:    startAt,
-		}
-
-		result, response, err := client.Issue.Search.Post(ctx, jql, nil, []string{"summary", "status"}, options)
+		result, response, err := client.Issue.Search.SearchJQL(ctx, jql, fields, expands, pageSize, nextPageToken)
 		if err != nil {
+			if response != nil {
+				log.Error().
+					Str("response.status", response.Status).
+					Str("response.body", response.Bytes.String()).
+					Msg("jira search failed")
+			}
+			
 			return err
 		}
 		response.Body.Close()
 
 		for i := range result.Issues {
-			if err := callback(&result.Issues[i]); err != nil {
+			if err := callback(result.Issues[i]); err != nil {
 				return err
 			}
 		}
 
-		totalIssues += len(result.Issues)
-
-		// Check if we've retrieved all issues
-		if startAt+len(result.Issues) >= result.Total {
+		if result.NextPageToken == "" {
 			break
+		} else {
+			nextPageToken = result.NextPageToken
 		}
-
-		startAt += pageSize
 	}
 
 	log.Info().
 		Str("label", label).
-		Int("total", totalIssues).
-		Msg("finished processing issues")
+		Msg("Finished searching for Jira issues")
 
 	return nil
 }
