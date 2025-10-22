@@ -59,4 +59,4 @@ echo "All repositories ready!"
 
 echo "Starting Slack bot application..."
 
-exec /usr/bin/warp-jira-agent
+exec /usr/bin/warp-jira-agent poll

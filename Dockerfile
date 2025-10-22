@@ -17,7 +17,7 @@ ARG TARGETARCH
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update \
     && apt-get install -y --no-install-recommends \
-    ca-certificates wget gnupg \
+    ca-certificates wget gnupg git \
     && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=${TARGETARCH} signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
