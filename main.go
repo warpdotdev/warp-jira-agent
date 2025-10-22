@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -129,7 +131,32 @@ func runAgent(ctx context.Context, workspaceDir string, issue *models.IssueSchem
 	}
 	defer logFile.Close()
 
-	cmd := exec.CommandContext(ctx, "warp", "agent", "run", "--prompt", issue.Fields.Summary)
+	// Atlassian uses a custom rich text JSON representation called ADF (the Atlassian Document Format).
+	// See https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
+	//
+	// For simplicity, we marshal the JSON as-is and expect the agent to figure it out.
+	// There are also a couple ADF libraries for Go that convert to HTML/Markdown:
+	// - https://github.com/pinpt/adf
+	// - https://pkg.go.dev/github.com/jcstorino/jira-cli/pkg/adf
+	issueJSON, err := json.MarshalIndent(issue, "", "  ")
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("failed to marshal issue to JSON")
+		return
+	}
+
+	// Format prompt with XML structure
+	prompt := fmt.Sprintf(`
+Address the following Jira issue to the best of your ability. You are given information about the issue in a simplified XML format.
+<issue-summary>%s</issue-summary>
+<issue>%s</issue>
+
+<system-reminder>DO NOT respond in XML, even though the issue description uses XML</system-reminder>		
+<system-reminder>Only create or modify files within %s, your workspace directory.</system-reminder>
+`, issue.Fields.Summary, string(issueJSON))
+
+	cmd := exec.CommandContext(ctx, "warp-dev", "agent", "run", "--prompt", prompt)
 	cmd.Dir = workspaceDir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
