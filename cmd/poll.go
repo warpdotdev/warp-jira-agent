@@ -175,9 +175,16 @@ warp-jira-agent comment --issue {issue-key} "{comment-text}"
 
 <system-reminder>DO NOT respond in XML, even though the issue description uses XML</system-reminder>		
 <system-reminder>Only create or modify files within %s, your workspace directory.</system-reminder>
-`, issue.Key, issue.Fields.Summary, string(issueJSON))
+`, issue.Key, issue.Fields.Summary, string(issueJSON), workspaceDir)
 
-	cmd := exec.CommandContext(ctx, "warp-cli-dev", "agent", "run", "--prompt", prompt, "--debug")
+	// Build warp-cli arguments, optionally adding a profile ID
+	args := []string{"agent", "run", "--prompt", prompt, "--debug"}
+	if profileID := viper.GetString("profile_id"); profileID != "" {
+		logger.Info().Str("profile_id", profileID).Msg("using warp profile for warp-cli")
+		args = append(args, "--profile", profileID)
+	}
+
+	cmd := exec.CommandContext(ctx, "warp-cli-dev", args...)
 	cmd.Dir = workspaceDir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
@@ -241,7 +248,7 @@ func createWorktree(ctx context.Context, workspaceDir, issueKey string, repo Rep
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid repository URL format: %s", repo.URL)
 	}
-	
+
 	repoName := parts[1]
 	repoDir := filepath.Join("repos", repoName)
 	worktreeDir := filepath.Join(workspaceDir, repoName)
@@ -255,8 +262,6 @@ func createWorktree(ctx context.Context, workspaceDir, issueKey string, repo Rep
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for %s: %w", worktreeDir, err)
 	}
-
-	
 
 	// Create git worktree with branch named after issue key
 	branchName := fmt.Sprintf("warp/%s-resolve", issueKey)

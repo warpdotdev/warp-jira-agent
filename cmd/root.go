@@ -33,6 +33,7 @@ func init() {
 	rootCmd.PersistentFlags().String("host", "", "URL of your Jira instance")
 	rootCmd.PersistentFlags().String("email", "", "Email address of the Jira account to log into")
 	rootCmd.PersistentFlags().String("token", "", "API token associated with the Jira account")
+	rootCmd.PersistentFlags().String("profile_id", "", "Warp profile ID to use for the agent")
 }
 
 func Execute() {
