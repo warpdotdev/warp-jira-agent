@@ -57,6 +57,6 @@ cd /app
 
 echo "All repositories ready!"
 
-echo "Starting Slack bot application..."
+echo "Starting Jira bot application..."
 
 exec /usr/bin/warp-jira-agent poll

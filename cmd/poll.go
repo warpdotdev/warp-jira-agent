@@ -72,7 +72,14 @@ func pollForNewIssues(ctx context.Context, client *atlassian.Client, label strin
 		return err
 	}
 
-	ticker := time.NewTicker(5 * time.Second)
+	handler := func(issue *models.IssueScheme) error {
+		return handleIssue(client, label, issue, reposConfig)
+	}
+	if err := searchIssues(ctx, client, label, handler); err != nil {
+		log.Error().Err(err).Msg("failed to search issues")
+	}
+
+	ticker := time.NewTicker(120 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -82,7 +89,7 @@ func pollForNewIssues(ctx context.Context, client *atlassian.Client, label strin
 			return nil
 		case <-ticker.C:
 			handler := func(issue *models.IssueScheme) error {
-				return handleIssue(issue, reposConfig)
+				return handleIssue(client, label, issue, reposConfig)
 			}
 			if err := searchIssues(ctx, client, label, handler); err != nil {
 				log.Error().Err(err).Msg("failed to search issues")
@@ -93,7 +100,7 @@ func pollForNewIssues(ctx context.Context, client *atlassian.Client, label strin
 	return nil
 }
 
-func handleIssue(issue *models.IssueScheme, reposConfig *ReposConfig) error {
+func handleIssue(client *atlassian.Client, label string, issue *models.IssueScheme, reposConfig *ReposConfig) error {
 	workspaceDir := filepath.Join(workspacesDir, issue.Key)
 	err := os.Mkdir(workspaceDir, 0755)
 	if err != nil {
@@ -116,13 +123,13 @@ func handleIssue(issue *models.IssueScheme, reposConfig *ReposConfig) error {
 		Msg("processing issue")
 
 	// Run agent in a new goroutine
-	go runAgent(context.Background(), workspaceDir, issue, reposConfig)
+	go runAgent(context.Background(), client, label, workspaceDir, issue, reposConfig)
 
 	return nil
 }
 
 // runAgent runs a Warp agent on the given issue.
-func runAgent(ctx context.Context, workspaceDir string, issue *models.IssueScheme, reposConfig *ReposConfig) {
+func runAgent(ctx context.Context, client *atlassian.Client, label string, workspaceDir string, issue *models.IssueScheme, reposConfig *ReposConfig) {
 	outputLogPath := filepath.Join(workspaceDir, "output.log")
 	logger := log.With().
 		Str("key", issue.Key).
@@ -182,6 +189,8 @@ warp-jira-agent comment --issue {issue-key} "{comment-text}"
 	if profileID := viper.GetString("profile_id"); profileID != "" {
 		logger.Info().Str("profile_id", profileID).Msg("using warp profile for warp-cli")
 		args = append(args, "--profile", profileID)
+	} else {
+		args = append(args, "--sandboxed")
 	}
 
 	cmd := exec.CommandContext(ctx, "warp-cli-dev", args...)
@@ -198,6 +207,36 @@ warp-jira-agent comment --issue {issue-key} "{comment-text}"
 	}
 
 	logger.Info().Msg("warp agent completed")
+	// remove the label from the issue
+	removeLabel(ctx, client, issue.Key, label)
+}
+
+func removeLabel(ctx context.Context, client *atlassian.Client, issueKey, label string) error {
+	log.Info().
+		Str("issue", issueKey).
+		Str("label", label).
+		Msg("removing label from issue")
+
+	ops := &models.UpdateOperations{}
+	err := ops.AddArrayOperation("labels", map[string]string{
+		label: "remove",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create update operation: %w", err)
+	}
+
+	// We pass an empty IssueScheme because we're only performing an update operation
+	_, err = client.Issue.Update(ctx, issueKey, false, &models.IssueScheme{}, nil, ops)
+	if err != nil {
+		return fmt.Errorf("failed to remove label: %w", err)
+	}
+
+	log.Info().
+		Str("issue", issueKey).
+		Str("label", label).
+		Msg("successfully removed label")
+
+	return nil
 }
 
 // loadReposConfig loads the repository configuration from repos.yaml
@@ -289,8 +328,8 @@ func createWorktree(ctx context.Context, workspaceDir, issueKey string, repo Rep
 // Search for issues with the label `label`, and run `callback` on each one.
 func searchIssues(ctx context.Context, client *atlassian.Client, label string, callback func(*models.IssueScheme) error) error {
 	log.Info().Str("label", label).Msg("Searching for Jira issues")
-
-	jql := "labels = " + label + " ORDER BY created DESC"
+	// Use statuscategory to avoid the hodgepodge of configurable done status types
+	jql := "labels = " + label + " AND statuscategory != Done ORDER BY created DESC"
 
 	const pageSize = 50
 
