@@ -72,14 +72,7 @@ func pollForNewIssues(ctx context.Context, client *atlassian.Client, label strin
 		return err
 	}
 
-	handler := func(issue *models.IssueScheme) error {
-		return handleIssue(client, label, issue, reposConfig)
-	}
-	if err := searchIssues(ctx, client, label, handler); err != nil {
-		log.Error().Err(err).Msg("failed to search issues")
-	}
-
-	ticker := time.NewTicker(120 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
