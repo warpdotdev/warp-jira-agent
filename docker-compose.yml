@@ -4,6 +4,7 @@ services:
       context: .
       args:
         CHANNEL: ${CHANNEL:-dev}
+        TARGETARCH: ${TARGETARCH:-amd64}
     command: ["poll"]
     init: true
     container_name: warp-jira-agent
