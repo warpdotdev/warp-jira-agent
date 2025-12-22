@@ -1,0 +1,6 @@
+model_id: claude-4-5-opus-thinking
+environment_id: 60JuKBuKRmaqv77tDKLjmS
+mcp_servers:
+  context7:
+    url: https://mcp.context7.com/mcp
+

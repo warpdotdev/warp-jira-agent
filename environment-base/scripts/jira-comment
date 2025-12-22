@@ -1,0 +1,4 @@
+#!/bin/sh
+
+scriptdir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+dotenvx run -f /config/.env.local -- python3 "$scriptdir/jira-comment.py" "$@"

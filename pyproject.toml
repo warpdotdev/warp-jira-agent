@@ -13,6 +13,8 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "jira>=3.8.0",
+    "pyyaml>=6.0.0",
+    "warp-agent-sdk>=0.2.0",
 ]
 
 [project.scripts]
@@ -22,6 +24,7 @@ warp-jira-agent = "warp_jira_agent.main:main"
 dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "types-pyyaml",
     "types-requests",
 ]
 
