@@ -6,6 +6,7 @@ import logging
 from jira import JIRA
 from jira.resources import Issue
 from warp_agent_sdk import AsyncWarpAPI
+from warp_agent_sdk.types.ambient_agent_config_param import AmbientAgentConfigParam
 
 from .task import build_issue_task, monitor_task, transition_issue_status
 
@@ -19,6 +20,7 @@ async def poll_issues_continuously(
     jira: JIRA,
     warp_client: AsyncWarpAPI,
     jql_query: str,
+    task_config: AmbientAgentConfigParam | None,
     max_issues: int = 100,
 ) -> None:
     """Continuously poll for Jira issues in a loop.
@@ -29,12 +31,13 @@ async def poll_issues_continuously(
         jira: Authenticated Jira client
         warp_client: Authenticated async Warp API client
         jql_query: JQL query string to search for issues
+        task_config: Task configuration to use for spawned tasks
         max_issues: Maximum number of issues to process per poll (default: 100)
     """
     logger.info("Starting continuous polling loop")
     while True:
         try:
-            await poll_issues(jira, warp_client, jql_query, max_issues)
+            await poll_issues(jira, warp_client, jql_query, task_config, max_issues)
         except Exception as e:
             logger.error(f"Error during polling iteration: {e}", exc_info=True)
 
@@ -47,6 +50,7 @@ async def poll_issues(
     jira: JIRA,
     warp_client: AsyncWarpAPI,
     jql_query: str,
+    task_config: AmbientAgentConfigParam | None,
     max_issues: int = 100,
 ) -> None:
     """Search for Jira issues and spawn Warp agent tasks for each.
@@ -55,6 +59,7 @@ async def poll_issues(
         jira: Authenticated Jira client
         warp_client: Authenticated async Warp API client
         jql_query: JQL query string to search for issues
+        task_config: Task configuration to use for spawned tasks
         max_issues: Maximum number of issues to process (default: 100)
     """
     # Search for issues matching the JQL query, excluding those already assigned to Warp
@@ -67,23 +72,29 @@ async def poll_issues(
     for issue in issues:
         logger.info(f"Processing issue {issue.key}: {issue.fields.summary}")
         try:
-            await process_issue(jira, warp_client, issue)
+            await process_issue(jira, warp_client, issue, task_config)
         except Exception as e:
             logger.error(f"Failed to process issue {issue.key}: {e}", exc_info=True)
             # Continue with next issue rather than failing completely
 
 
-async def process_issue(jira: JIRA, warp_client: AsyncWarpAPI, issue: Issue) -> None:
+async def process_issue(
+    jira: JIRA,
+    warp_client: AsyncWarpAPI,
+    issue: Issue,
+    task_config: AmbientAgentConfigParam | None,
+) -> None:
     """Process a single Jira issue by spawning and monitoring a Warp agent task.
 
     Args:
         jira: Authenticated Jira client
         warp_client: Authenticated async Warp API client
         issue: Jira issue to process
+        task_config: Task configuration to use for spawned tasks
     """
     issue_key = issue.key
 
-    task_params = build_issue_task(issue)
+    task_params = build_issue_task(issue, task_config)
 
     # Spawn the Warp agent task.
     logger.info(f"Spawning Warp agent task for issue {issue_key}")

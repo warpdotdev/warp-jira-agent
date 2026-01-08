@@ -20,27 +20,32 @@ logger = logging.getLogger(__name__)
 
 
 def load_task_config() -> AmbientAgentConfigParam | None:
-    """Load task configuration from file specified in WARP_TASK_CONFIG_FILE environment variable.
+    """Load task configuration from a Warp configuration file.
 
-    The config file can be either JSON or YAML format.
+    Searches for warp.config.{json,yaml,yml} in the current directory.
 
     Returns:
-        Task configuration object, or None if no config file is specified
+        Task configuration object, or None if no config file is found
 
     Raises:
-        FileNotFoundError: If the config file doesn't exist
         ValueError: If the config file format is invalid or unsupported
     """
-    config_file_path = os.getenv("WARP_TASK_CONFIG_FILE")
-    if not config_file_path:
-        logger.debug("No WARP_TASK_CONFIG_FILE environment variable set")
+    # Search for config files in order of preference
+    current_dir = Path.cwd()
+    config_filenames = ["warp.config.json", "warp.config.yaml", "warp.config.yml"]
+    
+    config_path = None
+    for filename in config_filenames:
+        candidate = current_dir / filename
+        if candidate.exists():
+            config_path = candidate
+            break
+    
+    if config_path is None:
+        logger.debug(f"No warp.config file found in {current_dir}")
         return None
 
-    config_path = Path(config_file_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Task config file not found: {config_file_path}")
-
-    logger.info(f"Loading task config from {config_file_path}")
+    logger.info(f"Loading task config from {config_path}")
 
     # Determine format based on file extension
     suffix = config_path.suffix.lower()
@@ -53,11 +58,14 @@ def load_task_config() -> AmbientAgentConfigParam | None:
             raise ValueError(f"Unsupported config file format: {suffix}. Use .json, .yaml, or .yml")
 
 
-def build_issue_task(issue: Issue) -> AgentRunParams:
+def build_issue_task(
+    issue: Issue, task_config: AmbientAgentConfigParam | None
+) -> AgentRunParams:
     """Build a Warp agent task from a Jira issue.
 
     Args:
         issue: A Jira Issue for the agent to work on
+        task_config: Task configuration to include in the agent params
 
     Returns:
         AgentRunParams suitable for spawning an agent to investigate or address the issue
@@ -93,10 +101,9 @@ DO NOT respond in XML, even though the issue description uses XML
         "prompt": prompt,
     }
 
-    # Load task config from file if specified
-    config = load_task_config()
-    if config:
-        params["config"] = config
+    # Include task config if provided
+    if task_config:
+        params["config"] = task_config
 
     return params
 

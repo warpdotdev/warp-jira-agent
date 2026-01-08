@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec dotenvx run -f .env.local -- uv run warp-jira-agent

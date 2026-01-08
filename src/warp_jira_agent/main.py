@@ -8,6 +8,7 @@ from jira import JIRA
 from warp_agent_sdk import AsyncWarpAPI
 
 from .poll import poll_issues_continuously
+from .task import load_task_config
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ async def async_main() -> None:
     jira_email = os.getenv("JIRA_EMAIL")
     jira_api_key = os.getenv("JIRA_API_KEY")
     warp_api_key = os.getenv("WARP_API_KEY")
-    jql_query = os.getenv("JIRA_JQL_QUERY", "project = WEB AND status = 'To Do'")
+    jql_query = os.getenv("JIRA_JQL_QUERY")
 
     if not jira_server:
         logger.error("JIRA_SERVER environment variable is required but not set")
@@ -34,6 +35,8 @@ async def async_main() -> None:
     if not warp_api_key:
         logger.error("WARP_API_KEY environment variable is required but not set")
         return
+    if not jql_query:
+        logger.error("JIRA_JQL_QUERY environment variable is required but not set")
 
     jira = JIRA(
         server=jira_server,
@@ -46,10 +49,17 @@ async def async_main() -> None:
     warp_client = AsyncWarpAPI(api_key=warp_api_key)
     logger.info("Warp API client initialized")
 
+    # Load task configuration once at startup
+    task_config = load_task_config()
+    if task_config:
+        logger.info("Loaded task configuration")
+    else:
+        logger.info("No task configuration found")
+
     logger.info(f"Using JQL query: {jql_query}")
 
     # Run the continuous polling loop (this will run indefinitely)
-    await poll_issues_continuously(jira, warp_client, jql_query)
+    await poll_issues_continuously(jira, warp_client, jql_query, task_config)
 
 
 def main() -> None:
